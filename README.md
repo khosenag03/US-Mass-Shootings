@@ -1,12 +1,15 @@
 # US-Mass-Shootings
 
 What this project is about and what it aims to accomplish?
+
 We will analyze crime data, targeting the frequency of Mass Shootings throughout the US to identify trends across locations, mental-health of shooter, shooter demographic data, day of the week of shooting, and type of firearm used. Our project will compare three decades of data, 1987-1997, 1997-2007, and 2007-2017.
 
 Explain the problem that the project addresses specifically.
+
 This project will address the frequency of mass shootings in the US and analyze the following statistical data: the states with the most frequent occurrence, types of locations the shootings most often occur, shooter-race, average shooter-age, day of the week most shootings occur, and the percentage of shooters that have a documented mental-illness. 
 
 What evidence is there to support the need for this project?
+
 The staggering number of over 300 mass shootings that have occurred within the last 30 years here in the US. 
 
 Project Description Outline:
