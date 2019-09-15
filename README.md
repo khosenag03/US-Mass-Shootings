@@ -15,9 +15,9 @@ The staggering number of over 300 mass shootings that have occurred within the l
 Project Description Outline:
 
   Python Flask-powered Restful API, HTML/CSS, JavaScript, and MongoDB.  
-  A custom “Creative” D3.js project (i.e., a nonstandard graph or chart)
-  A combination of web scraping and Leaflet or Plotly
-  A dashboard page with multiple charts that update from the same data
+  Custom “Creative” D3.js project (i.e., a nonstandard graph or chart)
+  Combination of web scraping and Leaflet or Plotly
+  Dashboard page with multiple charts that update from the same data
   Includes at least one new JS Library.
   Powered by at least a data set with at least 100 Records.
   Includes user-driven interactions(e.g. menus, dropdowns, textboxes).
