@@ -13,6 +13,7 @@ What evidence is there to support the need for this project?
 The staggering number of over 300 mass shootings that have occurred within the last 30 years here in the US. 
 
 Project Description Outline:
+
   Python Flask-powered Restful API, HTML/CSS, JavaScript, and MongoDB.  
   A custom “Creative” D3.js project (i.e., a nonstandard graph or chart)
   A combination of web scraping and Leaflet or Plotly
