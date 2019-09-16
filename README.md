@@ -1,27 +1,3 @@
-
-
-
-Skip to content
-Using Gmail with screen readers
-
-2 of 4,387
-[MARKDOWN_MAKER] Mass Shootings in the US Project Proposal
-Inbox
-x
-
-mrnikitajones@gmail.com
-Attachments
-5:41 PM (2 minutes ago)
-to me
-
-Your converted markdown document is attached (converted from 
-https://docs.google.com/open?id=1qwr9ejDQEbNRvk5ij88DZbCWNyDn6vKgLcQx3KJ9M4Q)
-
-Don't know how to use the format options? See 
-http://github.com/mangini/gdocs2md
-
-2 Attachments
-
 **Mass Shootings in the U.S. Project Proposal**
 
 ** **
