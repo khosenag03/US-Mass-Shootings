@@ -1,289 +1,145 @@
-/*
-Usage: 
-  Adding this script to your doc: 
-    - Tools > Script Manager > New
-    - Select "Blank Project", then paste this code in and save.
-  Running the script:
-    - Tools > Script Manager
-    - Select "ConvertToMarkdown" function.
-    - Click Run button.
-    - Converted doc will be mailed to you. Subject will be "[MARKDOWN_MAKER]...".
-*/
 
-function ConvertToMarkdown() {
-  var numChildren = DocumentApp.getActiveDocument().getActiveSection().getNumChildren();
-  var text = "";
-  var inSrc = false;
-  var inClass = false;
-  var globalImageCounter = 0;
-  var globalListCounters = {};
-  // edbacher: added a variable for indent in src <pre> block. Let style sheet do margin.
-  var srcIndent = "";
-  
-  var attachments = [];
-  
-  // Walk through all the child elements of the doc.
-  for (var i = 0; i < numChildren; i++) {
-    var child = DocumentApp.getActiveDocument().getActiveSection().getChild(i);
-    var result = processParagraph(i, child, inSrc, globalImageCounter, globalListCounters);
-    globalImageCounter += (result && result.images) ? result.images.length : 0;
-    if (result!==null) {
-      if (result.sourcePretty==="start" && !inSrc) {
-        inSrc=true;
-        text+="<pre class=\"prettyprint\">\n";
-      } else if (result.sourcePretty==="end" && inSrc) {
-        inSrc=false;
-        text+="</pre>\n\n";
-      } else if (result.source==="start" && !inSrc) {
-        inSrc=true;
-        text+="<pre>\n";
-      } else if (result.source==="end" && inSrc) {
-        inSrc=false;
-        text+="</pre>\n\n";
-      } else if (result.inClass==="start" && !inClass) {
-        inClass=true;
-        text+="<div class=\""+result.className+"\">\n";
-      } else if (result.inClass==="end" && inClass) {
-        inClass=false;
-        text+="</div>\n\n";
-      } else if (inClass) {
-        text+=result.text+"\n\n";
-      } else if (inSrc) {
-        text+=(srcIndent+escapeHTML(result.text)+"\n");
-      } else if (result.text && result.text.length>0) {
-        text+=result.text+"\n\n";
-      }
-      
-      if (result.images && result.images.length>0) {
-        for (var j=0; j<result.images.length; j++) {
-          attachments.push( {
-            "fileName": result.images[j].name,
-            "mimeType": result.images[j].type,
-            "content": result.images[j].bytes } );
-        }
-      }
-    } else if (inSrc) { // support empty lines inside source code
-      text+='\n';
-    }
-      
-  }
-  
-  attachments.push({"fileName":DocumentApp.getActiveDocument().getName()+".md", "mimeType": "text/plain", "content": text});
-  
-  MailApp.sendEmail(Session.getActiveUser().getEmail(), 
-                    "[MARKDOWN_MAKER] "+DocumentApp.getActiveDocument().getName(), 
-                    "Your converted markdown document is attached (converted from "+DocumentApp.getActiveDocument().getUrl()+")"+
-                    "\n\nDon't know how to use the format options? See http://github.com/mangini/gdocs2md\n",
-                    { "attachments": attachments });
-}
 
-function escapeHTML(text) {
-  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
-// Process each child element (not just paragraphs).
-function processParagraph(index, element, inSrc, imageCounter, listCounters) {
-  // First, check for things that require no processing.
-  if (element.getNumChildren()==0) {
-    return null;
-  }  
-  // Punt on TOC.
-  if (element.getType() === DocumentApp.ElementType.TABLE_OF_CONTENTS) {
-    return {"text": "[[TOC]]"};
-  }
-  
-  // Set up for real results.
-  var result = {};
-  var pOut = "";
-  var textElements = [];
-  var imagePrefix = "image_";
-  
-  // Handle Table elements. Pretty simple-minded now, but works for simple tables.
-  // Note that Markdown does not process within block-level HTML, so it probably 
-  // doesn't make sense to add markup within tables.
-  if (element.getType() === DocumentApp.ElementType.TABLE) {
-    textElements.push("<table>\n");
-    var nCols = element.getChild(0).getNumCells();
-    for (var i = 0; i < element.getNumChildren(); i++) {
-      textElements.push("  <tr>\n");
-      // process this row
-      for (var j = 0; j < nCols; j++) {
-        textElements.push("    <td>" + element.getChild(i).getChild(j).getText() + "</td>\n");
-      }
-      textElements.push("  </tr>\n");
-    }
-    textElements.push("</table>\n");
-  }
-  
-  // Process various types (ElementType).
-  for (var i = 0; i < element.getNumChildren(); i++) {
-    var t=element.getChild(i).getType();
-    
-    if (t === DocumentApp.ElementType.TABLE_ROW) {
-      // do nothing: already handled TABLE_ROW
-    } else if (t === DocumentApp.ElementType.TEXT) {
-      var txt=element.getChild(i);
-      pOut += txt.getText();
-      textElements.push(txt);
-    } else if (t === DocumentApp.ElementType.INLINE_IMAGE) {
-      result.images = result.images || [];
-      var contentType = element.getChild(i).getBlob().getContentType();
-      var extension = "";
-      if (/\/png$/.test(contentType)) {
-        extension = ".png";
-      } else if (/\/gif$/.test(contentType)) {
-        extension = ".gif";
-      } else if (/\/jpe?g$/.test(contentType)) {
-        extension = ".jpg";
-      } else {
-        throw "Unsupported image type: "+contentType;
-      }
-      var name = imagePrefix + imageCounter + extension;
-      imageCounter++;
-      textElements.push('![image alt text]('+name+')');
-      result.images.push( {
-        "bytes": element.getChild(i).getBlob().getBytes(), 
-        "type": contentType, 
-        "name": name});
-    } else if (t === DocumentApp.ElementType.PAGE_BREAK) {
-      // ignore
-    } else if (t === DocumentApp.ElementType.HORIZONTAL_RULE) {
-      textElements.push('* * *\n');
-    } else if (t === DocumentApp.ElementType.FOOTNOTE) {
-      textElements.push(' (NOTE: '+element.getChild(i).getFootnoteContents().getText()+')');
-    } else {
-      throw "Paragraph "+index+" of type "+element.getType()+" has an unsupported child: "
-      +t+" "+(element.getChild(i)["getText"] ? element.getChild(i).getText():'')+" index="+index;
-    }
-  }
+Skip to content
+Using Gmail with screen readers
 
-  if (textElements.length==0) {
-    // Isn't result empty now?
-    return result;
-  }
-  
-  // evb: Add source pretty too. (And abbreviations: src and srcp.)
-  // process source code block:
-  if (/^\s*---\s+srcp\s*$/.test(pOut) || /^\s*---\s+source pretty\s*$/.test(pOut)) {
-    result.sourcePretty = "start";
-  } else if (/^\s*---\s+src\s*$/.test(pOut) || /^\s*---\s+source code\s*$/.test(pOut)) {
-    result.source = "start";
-  } else if (/^\s*---\s+class\s+([^ ]+)\s*$/.test(pOut)) {
-    result.inClass = "start";
-    result.className = RegExp.$1;
-  } else if (/^\s*---\s*$/.test(pOut)) {
-    result.source = "end";
-    result.sourcePretty = "end";
-    result.inClass = "end";
-  } else if (/^\s*---\s+jsperf\s*([^ ]+)\s*$/.test(pOut)) {
-    result.text = '<iframe style="width: 100%; height: 340px; overflow: hidden; border: 0;" '+
-                  'src="http://www.html5rocks.com/static/jsperfview/embed.html?id='+RegExp.$1+
-                  '"></iframe>';
-  } else {
+2 of 4,387
+[MARKDOWN_MAKER] Mass Shootings in the US Project Proposal
+Inbox
+x
 
-    prefix = findPrefix(inSrc, element, listCounters);
-  
-    var pOut = "";
-    for (var i=0; i<textElements.length; i++) {
-      pOut += processTextElement(inSrc, textElements[i]);
-    }
+mrnikitajones@gmail.com
+Attachments
+5:41 PM (2 minutes ago)
+to me
 
-    // replace Unicode quotation marks
-    pOut = pOut.replace('\u201d', '"').replace('\u201c', '"');
+Your converted markdown document is attached (converted from 
+https://docs.google.com/open?id=1qwr9ejDQEbNRvk5ij88DZbCWNyDn6vKgLcQx3KJ9M4Q)
+
+Don't know how to use the format options? See 
+http://github.com/mangini/gdocs2md
+
+2 Attachments
+
+**Mass Shootings in the U.S. Project Proposal**
+
+** **
+
+**1.** 	**Project Title:**
+
+**a.** 	Mass Shootings in the US.
+
+** **
+
+**2.** 	**Team Members:**
+
+**a.** 	Edward Gates Jr.
+
+**b.**  	Nikita Jones
+
+**c.** 	Mason Waters
+
+** **
+
+**3.** 	**Project Description Outline:**
+
+1. Must Include:
+
+    1. Python Flask-powered Restful API, HTML/CSS, JavaScript, and at least one database (SQL, MongoDB, SQLite, etc.).
+
+    2. Should fall into one of the below four tracks:
+
+        1. A custom "Creative" D3.js project (i.e., a nonstandard graph or chart)
+
+        2. A combination of web scraping and Leaflet or Plotly
+
+        3. **A dashboard page with multiple charts that update from the same data**
+
+        4. A "thick" server that performs multiple manipulations or data in a database prior to visualizations (must be approved)
+
+    3. Your project should include at least one JS Library that we did not cover.
+
+    4. Your project must be powered by at least a data set with at least 100 Records.
+
+    5. You project must include some level of user-driven interactions(e.g. menus, dropdowns, textboxes).
+
+    6. Your final visualization should ideally include at least three views.
+
+	
+
+<table>
+  <tr>
+    <td>Project Purpose</td>
+    <td>What this project is about and what it aims to accomplish?
+We will analyze crime data, targeting the frequency of Mass Shootings throughout the US to identify trends across locations, mental-health of shooter, shooter demographic data, day of the week of shooting, and type of firearm used. Our project will compare three decades of data, 1987-1997, 1997-2007, and 2007-2017.</td>
+  </tr>
+  <tr>
+    <td>The Need for this Project</td>
+    <td>Explain the problem that the project addresses specifically.
+This project will address the frequency of mass shootings in the US and analyze the following statistical data: the states with the most frequent occurrence, types of locations the shootings most often occur, shooter-race, average shooter-age, day of the week most shootings occur, and the percentage of shooters that have a documented mental-illness. </td>
+  </tr>
+  <tr>
+    <td>Evidence</td>
+    <td>What evidence is there to support the need for this project?
+The staggering number of over 300 mass shootings that have occurred within the last 30 years here in the US. 
+</td>
+  </tr>
+</table>
+
+
+ 		 
+
+**4.** 	**Data Sets to be Used:**
+
+** **
+
+<table>
+  <tr>
+    <td> Url = 
+https://public.opendatasoft.com/api/records/1.0/search/?dataset=mass-shootings-in-america&rows=1000&facet=city&facet=state&facet=shooter_sex&facet=shooter_race&facet=type_of_gun_general&facet=fate_of_shooter_at_the_scene&facet=shooter_s_cause_of_death&facet=school_related&facet=place_type&facet=relationship_to_incident_location&facet=targeted_victim_s_general&facet=possible_motive_general&facet=history_of_mental_illness_general&facet=military_experience
+</td>
+  </tr>
+</table>
+
+
  
-    result.text = prefix+pOut;
-  }
-  
-  return result;
-}
 
-// Add correct prefix to list items.
-function findPrefix(inSrc, element, listCounters) {
-  var prefix="";
-  if (!inSrc) {
-    if (element.getType()===DocumentApp.ElementType.PARAGRAPH) {
-      var paragraphObj = element;
-      switch (paragraphObj.getHeading()) {
-        // Add a # for each heading level. No break, so we accumulate the right number.
-        case DocumentApp.ParagraphHeading.HEADING6: prefix+="#";
-        case DocumentApp.ParagraphHeading.HEADING5: prefix+="#";
-        case DocumentApp.ParagraphHeading.HEADING4: prefix+="#";
-        case DocumentApp.ParagraphHeading.HEADING3: prefix+="#";
-        case DocumentApp.ParagraphHeading.HEADING2: prefix+="#";
-        case DocumentApp.ParagraphHeading.HEADING1: prefix+="# ";
-        default:
-      }
-    } else if (element.getType()===DocumentApp.ElementType.LIST_ITEM) {
-      var listItem = element;
-      var nesting = listItem.getNestingLevel()
-      for (var i=0; i<nesting; i++) {
-        prefix += "    ";
-      }
-      var gt = listItem.getGlyphType();
-      // Bullet list (<ul>):
-      if (gt === DocumentApp.GlyphType.BULLET
-          || gt === DocumentApp.GlyphType.HOLLOW_BULLET
-          || gt === DocumentApp.GlyphType.SQUARE_BULLET) {
-        prefix += "* ";
-      } else {
-        // Ordered list (<ol>):
-        var key = listItem.getListId() + '.' + listItem.getNestingLevel();
-        var counter = listCounters[key] || 0;
-        counter++;
-        listCounters[key] = counter;
-        prefix += counter+". ";
-      }
-    }
-  }
-  return prefix;
-}
+**5.** 	**Rough Breakdown of Tasks:**
 
-function processTextElement(inSrc, txt) {
-  if (typeof(txt) === 'string') {
-    return txt;
-  }
-  
-  var pOut = txt.getText();
-  if (! txt.getTextAttributeIndices) {
-    return pOut;
-  }
-  
-  var attrs=txt.getTextAttributeIndices();
-  var lastOff=pOut.length;
+a.     Mason Waters
 
-  for (var i=attrs.length-1; i>=0; i--) {
-    var off=attrs[i];
-    var url=txt.getLinkUrl(off);
-    var font=txt.getFontFamily(off);
-    if (url) {  // start of link
-      if (i>=1 && attrs[i-1]==off-1 && txt.getLinkUrl(attrs[i-1])===url) {
-        // detect links that are in multiple pieces because of errors on formatting:
-        i-=1;
-        off=attrs[i];
-        url=txt.getLinkUrl(off);
-      }
-      pOut=pOut.substring(0, off)+'['+pOut.substring(off, lastOff)+']('+url+')'+pOut.substring(lastOff);
-    } else if (font) {
-      if (!inSrc && font===font.COURIER_NEW) {
-        while (i>=1 && txt.getFontFamily(attrs[i-1]) && txt.getFontFamily(attrs[i-1])===font.COURIER_NEW) {
-          // detect fonts that are in multiple pieces because of errors on formatting:
-          i-=1;
-          off=attrs[i];
-        }
-        pOut=pOut.substring(0, off)+'`'+pOut.substring(off, lastOff)+'`'+pOut.substring(lastOff);
-      }
-    }
-    if (txt.isBold(off)) {
-      var d1 = d2 = "**";
-      if (txt.isItalic(off)) {
-        // edbacher: changed this to handle bold italic properly.
-        d1 = "**_"; d2 = "_**";
-      }
-      pOut=pOut.substring(0, off)+d1+pOut.substring(off, lastOff)+d2+pOut.substring(lastOff);
-    } else if (txt.isItalic(off)) {
-      pOut=pOut.substring(0, off)+'*'+pOut.substring(off, lastOff)+'*'+pOut.substring(lastOff);
-    }
-    lastOff=off;
-  }
-  return pOut;
-}
+1. Project Manager
+
+2. Extracted API mass shooting data and load data in MongoDB database
+
+3. Pull data from MongoDB to create mapping of locations for additional analysis
+
+4. Developed dashboard for presentation visualization
+
+    
+
+  
+
+b.     Edward Gates Jr.
+
+1. Researching new JS library not previously learned in class (Chartist)
+
+2. Created Powerpoint for group presentation
+
+3. Development of Visualizations 
+
+                     		
+
+c.      Nikita Jones
+
+1. Researching state policy data for additional analysis
+
+2. Import, clean, analyzed statistical data from API
+
+3. Development of Visualizations 
+
+		
+
+Mass Shootings in the US Project Proposal.md
+Displaying Mass Shootings in the US Project Proposal.md.
